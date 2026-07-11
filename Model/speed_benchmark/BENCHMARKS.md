@@ -5,9 +5,9 @@ Per-GPU inference benchmarks for AutoE2E. To add results for your own GPU, run t
 parameter.
 
 ## NVIDIA GeForce RTX 3060 Laptop GPU
+
 <details open>
   <summary>Toggle view</summary>
-
 
 | Backbone | Fusion Method | FPS | Average Latency [ms] | Worst-Case Latency [ms] | Latency Jitter [ms] | Peak VRAM Allocated [MB] | Peak VRAM Reserved [MB] |
 | -------- | ------------- | --- | --------------- | ------------------ | -------------- | ------------------- | ------------------ |
@@ -21,9 +21,9 @@ parameter.
 </details>
 
 ## NVIDIA GeForce RTX 4050 Laptop GPU
+
 <details open>
   <summary>Toggle view</summary>
-
 
 | Backbone | Fusion Method | FPS | Average Latency [ms] | Worst-Case Latency [ms] | Latency Jitter [ms] | Peak VRAM Allocated [MB] | Peak VRAM Reserved [MB] |
 | -------- | ------------- | --- | --------------- | ------------------ | -------------- | ------------------- | ------------------ |
@@ -37,6 +37,7 @@ parameter.
 </details>
 
 ## NVIDIA GeForce RTX 5080 GPU
+
 <details open>
   <summary>Toggle view</summary>
 
@@ -66,6 +67,7 @@ parameter.
 </details>
 
 ## NVIDIA RTX A6000 GPU
+
 <details open>
   <summary>Toggle view</summary>
 
@@ -91,6 +93,24 @@ parameter.
 | conv_next_v2_tiny | bev | 1 | 10.7 | 93.9 | 94.2 | 0.3 | 1819 | 70.0M |
 | conv_next_v2_tiny | bev | 2 | 5.5 | 182.1 | 183.2 | 1.2 | 3350 | 70.0M |
 | conv_next_v2_tiny | bev | 4 | 2.8 | 355.7 | 356.8 | 1.1 | 6418 | 70.0M |
+
+</details>
+
+### NVIDIA GeForce RTX 4070
+
+<details open>
+  <summary>Toggle view</summary>
+
+> CUDA 11.8 | Driver 580.159.03 | PyTorch 2.7.1+cu118 | Commit `8ac3240` | Resolution [256, 256]
+
+| Backbone | Fusion Mode | Batch | FPS | Latency (ms) | p99 (ms) | Jitter (ms) | VRAM (MB) | Params |
+|----------|-------------|-------|-----|--------------|----------|-------------|-----------|--------|
+| swin_v2_tiny | bev | 1 | 37.7 | 26.5 | 27.5 | 1.1 | 397 | 62.8M |
+| swin_v2_tiny | bev | 2 | 24.3 | 41.2 | 42.2 | 1.1 | 545 | 62.8M |
+| swin_v2_tiny | bev | 4 | 14.1 | 71.2 | 72.4 | 1.3 | 827 | 62.8M |
+| conv_next_v2_tiny | bev | 1 | 36.5 | 27.4 | 29.1 | 1.9 | 419 | 63.1M |
+| conv_next_v2_tiny | bev | 2 | 23.4 | 42.8 | 43.9 | 1.2 | 584 | 63.1M |
+| conv_next_v2_tiny | bev | 4 | 13.3 | 74.9 | 76.0 | 1.2 | 910 | 63.1M |
 
 </details>
 
