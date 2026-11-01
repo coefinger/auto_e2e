@@ -5,7 +5,6 @@ from functools import lru_cache
 from types import SimpleNamespace
 import struct
 import numpy as np
-from scipy.spatial.transform import Rotation
 from scipy.optimize import linear_sum_assignment
 from .protocol import UNIAD_TO_KIT
 
@@ -64,16 +63,6 @@ def match_cameras(packed, candidates):
             f"Packed/raw camera geometry differs: max_abs={np.max(np.abs(packed - matched))}"
         )
     return cols, float(np.max(np.abs(packed - matched)))
-
-
-def canonical_target(poses, index):
-    if index + 30 >= len(poses):
-        raise ValueError("Missing canonical future")
-    rotation = Rotation.from_quat(poses[index, 4:8]).as_matrix()
-    yaw = Rotation.from_quat(poses[index, 4:8]).as_euler("ZYX")[0]
-    world_to_yaw = np.array([[np.cos(yaw), np.sin(yaw)], [-np.sin(yaw), np.cos(yaw)]])
-    delta = poses[index + 1 : index + 31, 1:3] - poses[index, 1:3]
-    return delta @ world_to_yaw.T, world_to_yaw @ rotation[:2, :2]
 
 
 def decode_pose(blob):

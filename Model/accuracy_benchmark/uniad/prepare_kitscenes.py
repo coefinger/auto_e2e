@@ -24,6 +24,7 @@ from .common import (
     RAW_REPO,
     RAW_REVISION,
     coverage,
+    is_root_entry,
     read_json,
     safe_child,
     sha256,
@@ -107,6 +108,8 @@ def read_shard(path):
     )
     with tarfile.open(path, "r:") as archive:
         for member in archive:
+            if is_root_entry(member.name):
+                continue
             safe_child(path.parent, member.name)
             if not member.name.endswith(suffixes):
                 continue
@@ -195,6 +198,8 @@ def extract_selected(archive_path, root, sid, indices, metadata_only=False):
     found = set()
     with tarfile.open(archive_path, "r:") as archive:
         for member in archive:
+            if is_root_entry(member.name):
+                continue
             safe_child(root, member.name)
             parts = PurePosixPath(member.name).parts
             relative = PurePosixPath(
@@ -245,6 +250,23 @@ def image_records(raw, index, calibrations):
     return records
 
 
+def schedule(anchors, n_poses, smoke=False):
+    """Dense phase streams and keyframe anchors; --smoke keeps one short stream."""
+    phases = phase_inputs(list(anchors))
+    keyframes = list(range(40, n_poses - 30, 90))
+    if smoke:
+        phase, indices, scored = phases[0]
+        phases = [(phase, indices[:9], scored.intersection(indices[:9]))]
+        keyframes = keyframes[:1]
+    return phases, keyframes
+
+
+def needed_frames(phases, keyframes):
+    needed = {i for _, indices, _ in phases for i in indices}
+    needed |= {i for anchor in keyframes for i in range(anchor - 40, anchor + 1, 5)}
+    return needed
+
+
 def scene_streams(sid, anchors, poses, raw, payload, smoke=False):
     """Construct the evaluated five dense streams and independent 4s windows."""
     if payload["reference"] != "base_frame":
@@ -278,23 +300,18 @@ def scene_streams(sid, anchors, poses, raw, payload, smoke=False):
         padded[:, :3] = packed[[0, 2, 1, 4, 3, 5]] @ transform
         padded[:, 0] *= 1600 / 512
         padded[:, 1] *= 900 / 512
-        match_cameras(padded, resized)
-    phases = phase_inputs(list(anchors))
-    keyframes = list(range(40, len(poses) - 30, 90))
-    if smoke:
-        phase, indices, scored = phases[0]
-        phases = [(phase, indices[:9], scored.intersection(indices[:9]))]
-        keyframes = keyframes[:1]
-    needed = {i for _, indices, _ in phases for i in indices}
-    needed |= {i for anchor in keyframes for i in range(anchor - 40, anchor + 1, 5)}
+        cols, _ = match_cameras(padded, resized)
+        if not np.array_equal(cols, np.arange(len(CAMERAS))):
+            raise ValueError(f"Mirror camera slots do not follow CAMERAS: {cols}")
+    phases, keyframes = schedule(anchors, len(poses), smoke)
+    needed = needed_frames(phases, keyframes)
     images = {i: image_records(raw, i, calibrations) for i in sorted(needed)}
 
     def timeline(name, indices, scored, track):
         stream = dict(scene_id=f"{sid}:{name}", physical_scene_id=sid, frames=[])
         for i in indices:
             rotation = Rotation.from_quat(poses[i, 4:8]).as_matrix()
-            can = past_can_bus(poses, i)
-            can[:3] = poses[i, 1:4] - poses[indices[0], 1:4]
+            can = past_can_bus(poses, i, indices[0])
             frame = dict(
                 frame=i,
                 timestamp=float(poses[i, 0]),
@@ -308,13 +325,8 @@ def scene_streams(sid, anchors, poses, raw, payload, smoke=False):
                 body_to_utm_xy=rotation[:2, :2].tolist(),
             )
             if i in scored:
-                velocity = (poses[i, 1:4] - poses[i - 1, 1:4]) / (
-                    poses[i, 0] - poses[i - 1, 0]
-                )
                 frame.update(
                     sample_uid=f"kitscenes-v1-{sid}-f{i:06d}",
-                    past_velocity_xy=(rotation.T @ velocity)[:2].tolist(),
-                    past_velocity_world_xy=velocity[:2].tolist(),
                     oracle_command=2,
                 )
                 if track == "dense":
@@ -397,7 +409,10 @@ def prepare(args):
         for sid in selected:
             anchors, shard_sha = scenes[sid]
             raw = safe_child(args.raw_dir, sid)
-            raw.mkdir(parents=True, exist_ok=True)
+            if args.download:
+                raw.mkdir(parents=True, exist_ok=True)
+            elif not raw.is_dir():
+                raise FileNotFoundError(f"Raw scene not found: {raw}")
             archive = None
             archive_sha = None
             if args.download:
@@ -414,16 +429,13 @@ def prepare(args):
             validate_poses(
                 poses, np.loadtxt(safe_child(raw, "timestamp.reference.txt"))
             )
-            indices = {
-                i for _, timeline, _ in phase_inputs(list(anchors)) for i in timeline
-            }
-            indices |= {
-                i
-                for anchor in range(40, len(poses) - 30, 90)
-                for i in range(anchor - 40, anchor + 1, 5)
-            }
             if archive is not None:
-                extract_selected(archive, raw, sid, indices)
+                extract_selected(
+                    archive,
+                    raw,
+                    sid,
+                    needed_frames(*schedule(anchors, len(poses), args.smoke)),
+                )
             tracks = scene_streams(
                 sid,
                 anchors,

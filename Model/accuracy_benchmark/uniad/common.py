@@ -51,6 +51,11 @@ def write_json(path, value):
     temporary.replace(path)
 
 
+def is_root_entry(name):
+    """True for tar entries such as "." or "./" that name the archive root."""
+    return not PurePosixPath(name).parts
+
+
 def safe_child(root, name):
     relative = PurePosixPath(name)
     if (

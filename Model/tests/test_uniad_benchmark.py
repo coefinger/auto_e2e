@@ -212,6 +212,51 @@ def test_extract_rejects_symlink_and_preserves_existing(tmp_path):
     assert (tmp_path / "out/poses.txt").read_bytes() == b"old"
 
 
+def test_extract_skips_archive_root_entry(tmp_path):
+    archive = tmp_path / "scene.tar"
+    with tarfile.open(archive, "w") as tar:
+        root = tarfile.TarInfo(".")
+        root.type = tarfile.DIRTYPE
+        tar.addfile(root)
+        for name in prepare_kitscenes.METADATA:
+            member = tarfile.TarInfo("./" + name)
+            member.size = 3
+            tar.addfile(member, io.BytesIO(b"abc"))
+    out = tmp_path / "out"
+    out.mkdir()
+    prepare_kitscenes.extract_selected(archive, out, "scene", [], True)
+    assert (out / "poses.txt").read_bytes() == b"abc"
+
+
+def test_swapped_mirror_camera_slots_are_rejected(synthetic_scene):
+    sid, poses, payload, raw, anchors = synthetic_scene
+    for anchor in anchors.values():
+        packed = anchor["projection_512"]
+        packed[1], packed[2] = packed[2], packed[1]
+    with pytest.raises(ValueError, match="camera slots"):
+        prepare_kitscenes.scene_streams(sid, anchors, poses, raw, payload)
+
+
+def test_smoke_extracts_only_smoke_frames(synthetic_scene):
+    sid, poses, payload, raw, anchors = synthetic_scene
+    smoke = prepare_kitscenes.needed_frames(
+        *prepare_kitscenes.schedule(anchors, len(poses), smoke=True)
+    )
+    full = prepare_kitscenes.needed_frames(
+        *prepare_kitscenes.schedule(anchors, len(poses))
+    )
+    assert smoke < full
+    tracks = prepare_kitscenes.scene_streams(sid, anchors, poses, raw, payload, True)
+    used = {f["frame"] for t in tracks.values() for s in t for f in s["frames"]}
+    assert used == smoke
+
+
+def test_can_bus_position_is_relative_to_stream_start(synthetic_scene):
+    _, poses, *_ = synthetic_scene
+    can = protocol.past_can_bus(poses, 50, 40)
+    np.testing.assert_allclose(can[:3], poses[50, 1:4] - poses[40, 1:4])
+
+
 def test_shared_metric_source_hash_is_mandatory(tmp_path):
     source = tmp_path / "source.py"
     source.write_text("raise RuntimeError('must never execute')")

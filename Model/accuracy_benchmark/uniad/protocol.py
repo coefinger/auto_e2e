@@ -58,10 +58,11 @@ def validate_poses(poses, reference):
         raise ValueError("Invalid pose quaternion")
 
 
-def past_can_bus(poses, index):
+def past_can_bus(poses, index, origin):
+    """CAN-bus vector at ``index``; position is relative to frame ``origin``."""
     rotation = Rotation.from_quat(poses[index, 4:8])
     can = np.zeros(18, dtype=np.float64)
-    can[:3] = poses[index, 1:4] - poses[0, 1:4]
+    can[:3] = poses[index, 1:4] - poses[origin, 1:4]
     can[3:7] = rotation.as_quat()[[3, 0, 1, 2]]
     yaw = rotation.as_euler("ZYX")[0] % (2 * np.pi)
     can[-2:] = [yaw, np.degrees(yaw)]
